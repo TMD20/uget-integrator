@@ -32,6 +32,9 @@ from urllib.parse import unquote
 from urllib.request import urlopen
 from os.path import splitext, basename, join, expanduser
 from mimetypes import guess_extension
+import requests
+import pyrfc6266
+import browser_cookie3
 
 cookie_filepath = join(tempfile.gettempdir(), 'uget_cookie')
 urls_filepath = join(tempfile.gettempdir(), 'uget_urls')
@@ -54,7 +57,7 @@ if sys.platform == 'win32':
     creation_flags |= 0x01000000
 
 
-def extract_file_name(url):
+def extract_file_name(url,cookies):
     fileName = ''
     if 'googlevideo.com/' in url and '&title=' in url:
         # Youtube video
@@ -75,8 +78,12 @@ def extract_file_name(url):
     elif 'www.youtube.com/watch' in url:
         fileName = ''
     else:
-        fileName = basename(urlparse(url).path).replace('%20', ' ')
-
+        #content-disposition
+        content=requests.get(url,allow_redirects=True,cookies=cookies).headers.get('content-disposition')
+        if content:
+            fileName=pyrfc6266.parse_filename(content)
+        if not fileName:
+            fileName = basename(urlparse(url).path).replace('%20', ' ')
     return fileName
 
 
@@ -176,7 +183,7 @@ def read_message():
                     return
                 use_cookie_file = False
                 fileName = data['FileName']
-                cookie = data['Cookies']
+                cookie = browser_cookie3.chromium(domain_name=urllib.parse.urlparse(url)[1])
                 referer = data['Referer']
                 command = [UGET_COMMAND]
                 if cookie:
@@ -187,7 +194,7 @@ def read_message():
                     except Exception as e:
                         pass
                 if not fileName:
-                    fileName = extract_file_name(url)
+                    fileName = extract_file_name(url,cookie)
                 else:
                     # Sometimes Firefox sends complete path
                     fileName = basename(fileName)
